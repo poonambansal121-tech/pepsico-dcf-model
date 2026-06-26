@@ -715,8 +715,7 @@ with tab4:
         textfont=dict(color='#ffffff', size=11),
     ))
     fig_t.add_vline(x=0, line_dash="dash", line_color="#4a90d9", line_width=1.5)
-    fig_t.update_layout(height=280, **DARK, title=f"Key Driver Impact on Share Price ($) — Base: ${base_pps:.2f}",
-                        plot_bgcolor='#0d1b2e', paper_bgcolor='#0d1b2e')
+    fig_t.update_layout(height=280, **DARK, title=f"Key Driver Impact on Share Price ($) — Base: ${base_pps:.2f}")
     st.plotly_chart(fig_t, use_container_width=True)
 
 # ──────────────────────────────────────────────────────────────────
