@@ -686,16 +686,16 @@ with tab4:
     df_sens.index.name = "WACC \\ LTGR"
 
     def color_cell(val):
-        if val is None: return 'background-color:#0f1c30; color:#3a5a80; font-style:italic'
-        if val > base_pps*1.15: return 'background-color:#1B3A6B; color:#ffffff; font-weight:bold'
-        if val < base_pps*0.85: return 'background-color:#4a7ab5; color:#ffffff; font-weight:bold'
-        return 'background-color:#2d5aa0; color:#ffffff'
+        if val is None: return 'background-color:#1a1a1a; color:#444; font-style:italic'
+        if val > base_pps*1.15: return 'background-color:#1A5C34; color:#00c878; font-weight:bold'
+        if val < base_pps*0.85: return 'background-color:#3d1010; color:#ff4b4b; font-weight:bold'
+        return 'background-color:#141414; color:#e0e0e0'
 
     styled = df_sens.style.map(color_cell).format(
         lambda x: f"${x:.2f}" if x is not None else "N/A"
     )
     st.dataframe(styled, use_container_width=True, height=300)
-    st.caption("🔵 Dark Navy = >15% above base  ·  🔷 Mid Blue = base range  ·  🩵 Light Blue = >15% below base")
+    st.caption("🟢 Green = >15% above base case · 🔴 Red = >15% below base case · ⬛ Neutral = base range")
 
     # Tornado
     st.markdown('<div class="section-title">Key Driver Impact on Share Price</div>', unsafe_allow_html=True)
