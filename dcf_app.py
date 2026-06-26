@@ -720,3 +720,163 @@ with tab4:
 # ──────────────────────────────────────────────────────────────────
 with tab5:
     st.markdown('<div class="section-title">Download Excel Report</div>', unsafe_allow_html=True)
+
+    def build_excel():
+        wb = Workbook()
+
+        # ── Styles ────────────────────────────────────────────────
+        hdr_fill  = PatternFill("solid", fgColor="1B3A6B")
+        sub_fill  = PatternFill("solid", fgColor="2d5aa0")
+        alt_fill  = PatternFill("solid", fgColor="dbeafe")
+        grn_fill  = PatternFill("solid", fgColor="1A5C34")
+        hdr_font  = Font(bold=True, color="FFFFFF", size=11)
+        sub_font  = Font(bold=True, color="FFFFFF", size=10)
+        wht_font  = Font(color="FFFFFF", size=10)
+        dark_font = Font(color="1B3A6B", bold=True, size=10)
+        ctr       = Alignment(horizontal="center", vertical="center")
+        rgt       = Alignment(horizontal="right",  vertical="center")
+
+        def hdr(ws, row, col, val, fill=hdr_fill, font=hdr_font, align=ctr):
+            c = ws.cell(row=row, column=col, value=val)
+            c.fill = fill; c.font = font; c.alignment = align
+
+        def val(ws, row, col, v, fill=None, font=None, align=rgt):
+            c = ws.cell(row=row, column=col, value=v)
+            if fill: c.fill = fill
+            if font: c.font = font
+            c.alignment = align
+
+        # ── Sheet 1: Summary ──────────────────────────────────────
+        ws1 = wb.active
+        ws1.title = "DCF Summary"
+        ws1.column_dimensions["A"].width = 28
+        for col in ["B","C","D","E","F"]: ws1.column_dimensions[col].width = 16
+
+        hdr(ws1, 1, 1, f"DCF Valuation — {d['name']} ({d['ticker']})", fill=hdr_fill, font=Font(bold=True,color="FFFFFF",size=13), align=Alignment(horizontal="left"))
+        ws1.merge_cells("A1:F1")
+        hdr(ws1, 2, 1, f"Sector: {d['sector']}  |  WACC: {m['wacc']*100:.2f}%  |  Current Price: ${d['price']:.2f}", fill=sub_fill, font=sub_font, align=Alignment(horizontal="left"))
+        ws1.merge_cells("A2:F2")
+
+        # Key results
+        hdr(ws1, 4, 1, "Valuation Output",       fill=hdr_fill)
+        hdr(ws1, 4, 2, "Value",                   fill=hdr_fill)
+        results = [
+            ("Gordon Growth — Price/Share", f"${m['pps_gg']:.2f}"),
+            ("Exit Multiple — Price/Share",  f"${m['pps_exit']:.2f}"),
+            ("Blended Fair Value",            f"${(m['pps_gg']+m['pps_exit'])/2:.2f}"),
+            ("Current Market Price",          f"${d['price']:.2f}"),
+            ("Enterprise Value (GG)",         f"${m['ev_gg']:,}mn"),
+            ("Enterprise Value (Exit)",       f"${m['ev_exit']:,}mn"),
+            ("WACC",                          f"{m['wacc']*100:.2f}%"),
+            ("Cost of Equity",                f"{m['ke']*100:.2f}%"),
+            ("After-Tax Cost of Debt",        f"{m['kd']*100:.2f}%"),
+        ]
+        for i, (lbl, v) in enumerate(results):
+            f = alt_fill if i % 2 == 0 else None
+            val(ws1, 5+i, 1, lbl, fill=f, font=Font(size=10), align=Alignment(horizontal="left"))
+            val(ws1, 5+i, 2, v,   fill=f, font=Font(bold=True, color="1B3A6B", size=10))
+
+        # ── Sheet 2: Income Statement ─────────────────────────────
+        ws2 = wb.create_sheet("Income Statement")
+        ws2.column_dimensions["A"].width = 22
+        for col in ["B","C","D","E","F"]: ws2.column_dimensions[col].width = 16
+
+        hdr(ws2, 1, 1, "Projected Income Statement ($mn)", fill=hdr_fill, font=Font(bold=True,color="FFFFFF",size=13), align=Alignment(horizontal="left"))
+        ws2.merge_cells("A1:F1")
+        hdr(ws2, 2, 1, "Metric", fill=sub_fill, font=sub_font, align=Alignment(horizontal="left"))
+        for j, y in enumerate(YEARS):
+            hdr(ws2, 2, j+2, str(y), fill=sub_fill, font=sub_font)
+
+        is_rows = [
+            ("Revenue",     m['revenues']),
+            ("EBIT",        m['ebits']),
+            ("EBIT Margin", [f"{v/r*100:.1f}%" for v,r in zip(m['ebits'],m['revenues'])]),
+            ("Tax",         m['taxes']),
+            ("NOPAT",       m['nopats']),
+            ("D&A",         m['das']),
+            ("EBITDA",      m['ebitdas']),
+            ("CapEx",       [f"({v:,})" for v in m['capexs']]),
+            ("FCFF",        m['fcffs']),
+        ]
+        for i, (lbl, vals) in enumerate(is_rows):
+            f = alt_fill if i % 2 == 0 else None
+            bold_row = lbl in ("FCFF", "EBITDA", "Revenue")
+            val(ws2, 3+i, 1, lbl, fill=f, font=Font(bold=bold_row, size=10), align=Alignment(horizontal="left"))
+            for j, v in enumerate(vals):
+                disp = f"${v:,}" if isinstance(v, int) else v
+                val(ws2, 3+i, j+2, disp, fill=f, font=Font(bold=bold_row, color="1B3A6B", size=10))
+
+        # ── Sheet 3: DCF Bridge ────────────────────────────────────
+        ws3 = wb.create_sheet("DCF Bridge")
+        ws3.column_dimensions["A"].width = 30
+        ws3.column_dimensions["B"].width = 18
+        hdr(ws3, 1, 1, "DCF Bridge ($mn)", fill=hdr_fill, font=Font(bold=True,color="FFFFFF",size=13), align=Alignment(horizontal="left"))
+        ws3.merge_cells("A1:B1")
+
+        bridge_rows_gg = [
+            ("PV of Explicit FCFs",         m['pv_exp']),
+            ("PV of Terminal Value (GG)",    m['pv_tv_gg']),
+            ("Enterprise Value",             m['ev_gg']),
+            ("+ Cash",                       cash_val),
+            ("+ Non-Operating Assets",       non_op),
+            ("− Gross Debt",                 -gross_debt),
+            ("− NCI",                        -nci),
+            ("= Equity Value",               m['eq_gg']),
+            ("÷ Diluted Shares (mn)",        shares_out),
+            ("★ Price Per Share (GG)",       m['pps_gg']),
+        ]
+        hdr(ws3, 2, 1, "Gordon Growth Method", fill=sub_fill, font=sub_font, align=Alignment(horizontal="left"))
+        hdr(ws3, 2, 2, "Value ($mn)", fill=sub_fill, font=sub_font)
+        for i, (lbl, v) in enumerate(bridge_rows_gg):
+            f = alt_fill if i % 2 == 0 else None
+            bold_row = "★" in lbl or "Enterprise" in lbl or "Equity" in lbl
+            val(ws3, 3+i, 1, lbl, fill=f, font=Font(bold=bold_row, size=10), align=Alignment(horizontal="left"))
+            val(ws3, 3+i, 2, f"${v:,}" if isinstance(v,int) else f"${v:.2f}", fill=f, font=Font(bold=bold_row, color="1B3A6B", size=10))
+
+        # ── Sheet 4: WACC ─────────────────────────────────────────
+        ws4 = wb.create_sheet("WACC")
+        ws4.column_dimensions["A"].width = 28
+        ws4.column_dimensions["B"].width = 16
+        hdr(ws4, 1, 1, "WACC Calculation", fill=hdr_fill, font=Font(bold=True,color="FFFFFF",size=13), align=Alignment(horizontal="left"))
+        ws4.merge_cells("A1:B1")
+        wacc_data = [
+            ("Risk-Free Rate",            f"{rf_rate*100:.2f}%"),
+            ("Beta (β)",                  f"{d['beta']:.2f}"),
+            ("Equity Risk Premium",       f"{erp*100:.2f}%"),
+            ("Additional Risk Premium",   f"{add_rp*100:.2f}%"),
+            ("Cost of Equity (Ke)",       f"{m['ke']*100:.2f}%"),
+            ("Pre-Tax Cost of Debt",      f"{pretax_kd*100:.2f}%"),
+            ("Tax Rate",                  f"{tax_rate*100:.0f}%"),
+            ("After-Tax Cost of Debt",    f"{m['kd']*100:.2f}%"),
+            ("Debt Weight",               f"{debt_wt*100:.0f}%"),
+            ("Equity Weight",             f"{equity_wt*100:.0f}%"),
+            ("WACC",                      f"{m['wacc']*100:.2f}%"),
+        ]
+        for i, (lbl, v) in enumerate(wacc_data):
+            f = alt_fill if i % 2 == 0 else None
+            bold_row = lbl == "WACC"
+            val(ws4, 2+i, 1, lbl, fill=f, font=Font(bold=bold_row, size=10), align=Alignment(horizontal="left"))
+            val(ws4, 2+i, 2, v,   fill=f, font=Font(bold=bold_row, color="1B3A6B", size=10))
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.getvalue()
+
+    st.markdown(f"""
+    <div style="background:#1a2a3a; border:1px solid #1B3A6B; border-radius:10px; padding:20px 24px; margin-bottom:16px">
+        <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:6px">📊 {d['name']} — DCF Valuation Report</div>
+        <div style="font-size:12px; color:#aac">Includes: DCF Summary · Projected Income Statement · DCF Bridge · WACC Breakdown</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    excel_bytes = build_excel()
+    filename    = f"{d['ticker']}_DCF_Valuation_{datetime.today().strftime('%Y%m%d')}.xlsx"
+
+    st.download_button(
+        label="⬇️  Download Excel Report",
+        data=excel_bytes,
+        file_name=filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
