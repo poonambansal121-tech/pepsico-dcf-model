@@ -505,18 +505,43 @@ with tab1:
         st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown('<div class="section-title">Projected Income Statement ($mn)</div>', unsafe_allow_html=True)
-    st.dataframe(pd.DataFrame({
-        "Year":        YEARS,
-        "Revenue":     [f"${v:,}" for v in m['revenues']],
-        "EBIT":        [f"${v:,}" for v in m['ebits']],
-        "EBIT Margin": [f"{v/r*100:.1f}%" for v,r in zip(m['ebits'], m['revenues'])],
-        "Tax":         [f"${v:,}" for v in m['taxes']],
-        "NOPAT":       [f"${v:,}" for v in m['nopats']],
-        "D&A":         [f"${v:,}" for v in m['das']],
-        "EBITDA":      [f"${v:,}" for v in m['ebitdas']],
-        "CapEx":       [f"(${v:,})" for v in m['capexs']],
-        "FCFF":        [f"${v:,}" for v in m['fcffs']],
-    }).set_index("Year"), use_container_width=True)
+
+    inc_rows = [
+        ("Revenue",     [f"${v:,}" for v in m['revenues']], False),
+        ("EBIT",        [f"${v:,}" for v in m['ebits']],    False),
+        ("EBIT Margin", [f"{v/r*100:.1f}%" for v,r in zip(m['ebits'], m['revenues'])], True),
+        ("Tax",         [f"${v:,}" for v in m['taxes']],    False),
+        ("NOPAT",       [f"${v:,}" for v in m['nopats']],   False),
+        ("D&A",         [f"${v:,}" for v in m['das']],      False),
+        ("EBITDA",      [f"${v:,}" for v in m['ebitdas']],  False),
+        ("CapEx",       [f"(${v:,})" for v in m['capexs']], False),
+        ("FCFF",        [f"${v:,}" for v in m['fcffs']],    False),
+    ]
+
+    year_headers = "".join(f'<th style="background:#1B3A6B;color:#fff;padding:10px 16px;text-align:center;font-size:13px;font-weight:700;border:1px solid #2d5aa0">{y}</th>' for y in YEARS)
+    table_rows = ""
+    for i, (label, vals, is_pct) in enumerate(inc_rows):
+        bg       = "#dbeafe" if i % 2 == 0 else "#ffffff"
+        lbl_bg   = "#1B3A6B" if label in ("FCFF", "EBITDA") else "#1e4080"
+        lbl_fw   = "800" if label in ("FCFF", "EBITDA") else "600"
+        val_fw   = "700" if label in ("FCFF", "EBITDA") else "500"
+        val_col  = "#1B3A6B" if not is_pct else "#0f4c9e"
+        cells    = "".join(f'<td style="padding:9px 16px;text-align:right;font-size:13px;background:{bg};color:{val_col};font-weight:{val_fw};border:1px solid #bfdbfe">{v}</td>' for v in vals)
+        table_rows += f'<tr><td style="padding:9px 14px;font-size:13px;font-weight:{lbl_fw};background:{lbl_bg};color:#fff;border:1px solid #2d5aa0;white-space:nowrap">{label}</td>{cells}</tr>'
+
+    st.markdown(f"""
+    <div style="overflow-x:auto; border-radius:10px; border:1px solid #1B3A6B; margin-top:8px">
+    <table style="width:100%;border-collapse:collapse;font-family:Inter,sans-serif">
+      <thead>
+        <tr>
+          <th style="background:#0f2a5c;color:#fff;padding:10px 14px;text-align:left;font-size:13px;font-weight:700;border:1px solid #2d5aa0">Metric</th>
+          {year_headers}
+        </tr>
+      </thead>
+      <tbody>{table_rows}</tbody>
+    </table>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────────────
 # TAB 2 — DCF BRIDGE
