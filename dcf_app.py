@@ -53,6 +53,7 @@ hr { border-color: #222 !important; }
 .stTabs [aria-selected="true"]    { background:#1B3A6B !important; color:#fff !important; }
 .stButton > button { background:#1B3A6B !important; color:#fff !important; border:none !important; border-radius:8px !important; font-weight:600 !important; }
 .stTextInput input { background:#1a1a1a !important; color:#fff !important; border-color:#333 !important; border-radius:8px !important; font-size:16px !important; font-weight:700 !important; }
+.stNumberInput input { background:#1a1a1a !important; color:#fff !important; border-color:#333 !important; border-radius:8px !important; }
 </style>
 """, unsafe_allow_html=True)
 
