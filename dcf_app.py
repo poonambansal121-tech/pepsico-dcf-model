@@ -211,12 +211,22 @@ def fetch_company_data(ticker_sym):
 
 with st.sidebar:
     st.markdown("## 🔍 Company Search")
-    st.caption("Type a company name or ticker symbol")
+
+    # Show currently loaded company
+    current_ticker = st.session_state.get("ticker", "PEP")
+    st.markdown(f"""
+    <div style="background:#1B3A6B; border-radius:8px; padding:8px 12px; margin-bottom:10px;
+                font-size:12px; color:#aac;">
+        Currently loaded: <b style="color:#fff; font-size:14px">{current_ticker}</b>
+        &nbsp;·&nbsp; <span style="color:#aac">Type below to change</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     search_query = st.text_input(
         "Search Company",
         value="",
-        placeholder="e.g. Apple, Tesla, PepsiCo, MSFT..."
+        placeholder="e.g. Apple, Tesla, PepsiCo, MSFT...",
+        key="search_input"
     ).strip()
 
     # ── Smart lookup ──────────────────────────────────────────────
@@ -233,16 +243,24 @@ with st.sidebar:
         if not resolved_ticker and len(search_query) <= 5 and search_query.replace("-","").isalpha():
             resolved_ticker = search_query.upper()
 
-        # 3. Live search via yfinance
+        # 3. Live search via yfinance — store results in session so dropdown persists
         if not resolved_ticker:
             with st.spinner("Searching..."):
                 results = search_ticker(search_query)
             if results:
-                options = [f"{name}  ({sym})" for name, sym in results]
-                chosen  = st.selectbox("Select company", options, label_visibility="collapsed")
-                resolved_ticker = chosen.split("(")[-1].rstrip(")")
+                st.session_state["last_search_results"] = results
+                st.session_state["last_search_query"]   = search_query
             else:
                 st.warning("No results found. Try a different name or ticker.")
+
+        # Show dropdown if we have live results for this query
+        if not resolved_ticker and st.session_state.get("last_search_query") == search_query:
+            results = st.session_state.get("last_search_results", [])
+            if results:
+                options = [f"{name}  ({sym})" for name, sym in results]
+                chosen  = st.selectbox("Select company", options,
+                                       key="company_select", label_visibility="collapsed")
+                resolved_ticker = chosen.split("(")[-1].rstrip(")")
 
         if resolved_ticker:
             st.success(f"✅ Selected: **{resolved_ticker}**")
@@ -677,7 +695,7 @@ with tab4:
         lambda x: f"${x:.2f}" if x is not None else "N/A"
     )
     st.dataframe(styled, use_container_width=True, height=300)
-    st.caption("🔵 Dark Navy (#1B3A6B) = >15% above base  ·  🔷 Mid Blue (#2d5aa0) = base range  ·  🩵 Light Blue = >15% below base")
+    st.caption("🔵 Dark Navy = >15% above base  ·  🔷 Mid Blue = base range  ·  🩵 Light Blue = >15% below base")
 
     # Tornado
     st.markdown('<div class="section-title">Key Driver Impact on Share Price</div>', unsafe_allow_html=True)
@@ -702,9 +720,9 @@ with tab4:
     impacts = {
         "Revenue Growth +2%":  quick_pps(rev_g=tuple([g+0.02 for g in revenue_growth])) - base_pps,
         "EBIT Margin +2%":     quick_pps(ebit_m=ebit_margin+0.02) - base_pps,
-        "WACC −0.5%":          quick_pps(w=m['wacc']-0.005) - base_pps,
+        "WACC -0.5%":          quick_pps(w=m['wacc']-0.005) - base_pps,
         "LTGR +0.5%":          quick_pps(g=ltgr+0.005) - base_pps,
-        "CapEx −2% Revenue":   quick_pps(cp=capex_pct-0.02) - base_pps,
+        "CapEx -2% Revenue":   quick_pps(cp=capex_pct-0.02) - base_pps,
     }
     fig_t = go.Figure(go.Bar(
         x=list(impacts.values()), y=list(impacts.keys()), orientation='h',
@@ -732,11 +750,8 @@ with tab5:
         hdr_fill  = PatternFill("solid", fgColor="1B3A6B")
         sub_fill  = PatternFill("solid", fgColor="2d5aa0")
         alt_fill  = PatternFill("solid", fgColor="dbeafe")
-        grn_fill  = PatternFill("solid", fgColor="1A5C34")
         hdr_font  = Font(bold=True, color="FFFFFF", size=11)
         sub_font  = Font(bold=True, color="FFFFFF", size=10)
-        wht_font  = Font(color="FFFFFF", size=10)
-        dark_font = Font(color="1B3A6B", bold=True, size=10)
         ctr       = Alignment(horizontal="center", vertical="center")
         rgt       = Alignment(horizontal="right",  vertical="center")
 
@@ -761,10 +776,7 @@ with tab5:
         hdr(ws1, 2, 1, f"Sector: {d['sector']}  |  WACC: {m['wacc']*100:.2f}%  |  Current Price: ${d['price']:.2f}", fill=sub_fill, font=sub_font, align=Alignment(horizontal="left"))
         ws1.merge_cells("A2:F2")
 
-        # Key results
-        hdr(ws1, 4, 1, "Valuation Output",       fill=hdr_fill)
-        hdr(ws1, 4, 2, "Value",                   fill=hdr_fill)
-        results = [
+        results_data = [
             ("Gordon Growth — Price/Share", f"${m['pps_gg']:.2f}"),
             ("Exit Multiple — Price/Share",  f"${m['pps_exit']:.2f}"),
             ("Blended Fair Value",            f"${(m['pps_gg']+m['pps_exit'])/2:.2f}"),
@@ -775,7 +787,9 @@ with tab5:
             ("Cost of Equity",                f"{m['ke']*100:.2f}%"),
             ("After-Tax Cost of Debt",        f"{m['kd']*100:.2f}%"),
         ]
-        for i, (lbl, v) in enumerate(results):
+        hdr(ws1, 4, 1, "Valuation Output", fill=hdr_fill)
+        hdr(ws1, 4, 2, "Value",             fill=hdr_fill)
+        for i, (lbl, v) in enumerate(results_data):
             f = alt_fill if i % 2 == 0 else None
             val(ws1, 5+i, 1, lbl, fill=f, font=Font(size=10), align=Alignment(horizontal="left"))
             val(ws1, 5+i, 2, v,   fill=f, font=Font(bold=True, color="1B3A6B", size=10))
@@ -818,7 +832,6 @@ with tab5:
         ws3.merge_cells("A1:B1")
 
         def fmt_val(v):
-            """Format number: negatives as $(x), positives as $x, floats as $x.xx"""
             if isinstance(v, float):
                 return f"$({abs(v):,.2f})" if v < 0 else f"${v:,.2f}"
             if isinstance(v, int):
@@ -826,16 +839,16 @@ with tab5:
             return str(v)
 
         bridge_rows_gg = [
-            ("PV of Explicit FCFs",      m['pv_exp']),
-            ("PV of Terminal Value (GG)",m['pv_tv_gg']),
-            ("Enterprise Value",         m['ev_gg']),
-            ("Add: Cash",                cash_val),
-            ("Add: Non-Operating Assets",non_op),
-            ("Less: Gross Debt",         -gross_debt),
-            ("Less: NCI",                -nci),
-            ("Equity Value",             m['eq_gg']),
-            ("Diluted Shares (mn)",      shares_out),
-            ("Price Per Share (GG)",     m['pps_gg']),
+            ("PV of Explicit FCFs",       m['pv_exp']),
+            ("PV of Terminal Value (GG)", m['pv_tv_gg']),
+            ("Enterprise Value",          m['ev_gg']),
+            ("Add: Cash",                 cash_val),
+            ("Add: Non-Operating Assets", non_op),
+            ("Less: Gross Debt",          -gross_debt),
+            ("Less: NCI",                 -nci),
+            ("Equity Value",              m['eq_gg']),
+            ("Diluted Shares (mn)",       shares_out),
+            ("Price Per Share (GG)",      m['pps_gg']),
         ]
         hdr(ws3, 2, 1, "Gordon Growth Method", fill=sub_fill, font=sub_font, align=Alignment(horizontal="left"))
         hdr(ws3, 2, 2, "Value ($mn)", fill=sub_fill, font=sub_font)
@@ -853,7 +866,7 @@ with tab5:
         ws4.merge_cells("A1:B1")
         wacc_data = [
             ("Risk-Free Rate",            f"{rf_rate*100:.2f}%"),
-            ("Beta (β)",                  f"{d['beta']:.2f}"),
+            ("Beta", f"{d['beta']:.2f}"),
             ("Equity Risk Premium",       f"{erp*100:.2f}%"),
             ("Additional Risk Premium",   f"{add_rp*100:.2f}%"),
             ("Cost of Equity (Ke)",       f"{m['ke']*100:.2f}%"),
@@ -886,7 +899,7 @@ with tab5:
     filename    = f"{d['ticker']}_DCF_Valuation_{datetime.today().strftime('%Y%m%d')}.xlsx"
 
     st.download_button(
-        label="⬇️  Download Excel Report",
+        label="Download Excel Report",
         data=excel_bytes,
         file_name=filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
