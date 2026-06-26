@@ -258,9 +258,10 @@ with st.sidebar:
                 resolved_ticker = sym
                 st.session_state.ticker = sym
 
-    final_ticker = resolved_ticker or st.session_state.get("ticker", "PEP")
+    if resolved_ticker:
+        st.session_state.ticker = resolved_ticker
 
-    run_btn = st.button("▶  Run DCF Model", use_container_width=True, type="primary")
+    final_ticker = st.session_state.get("ticker", "PEP")
     st.caption("Data auto-fetched live from Yahoo Finance")
     st.divider()
 
@@ -296,10 +297,7 @@ with st.sidebar:
 if "ticker" not in st.session_state:
     st.session_state.ticker = "PEP"
 
-if run_btn and final_ticker:
-    st.session_state.ticker = final_ticker.upper().strip()
-
-ticker_sym = st.session_state.ticker
+ticker_sym = st.session_state.get("ticker", "PEP")
 
 with st.spinner(f"Fetching data for {ticker_sym} from Yahoo Finance..."):
     d = fetch_company_data(ticker_sym)
