@@ -25,7 +25,10 @@ st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .stApp { background-color: #0f0f0f; color: #e0e0e0; }
-#MainMenu, footer { visibility: hidden; }
+#MainMenu, footer, header { visibility: hidden; }
+.stDeployButton { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
 section[data-testid="stSidebar"] { background-color: #111 !important; border-right: 1px solid #222 !important; }
 section[data-testid="stSidebar"] * { color: #ccc !important; }
 .dcf-header { background: linear-gradient(135deg, #1B3A6B 0%, #2d5aa0 100%); border-radius: 14px; padding: 24px 28px; margin-bottom: 20px; }
@@ -63,6 +66,57 @@ DARK = dict(
 )
 
 YEARS = [2026, 2027, 2028, 2029, 2030]
+
+# ── COMPANY NAME → TICKER LOOKUP ─────────────────────────────────
+COMPANY_LOOKUP = {
+    "Apple": "AAPL", "Microsoft": "MSFT", "Google": "GOOGL", "Alphabet": "GOOGL",
+    "Amazon": "AMZN", "Tesla": "TSLA", "Meta": "META", "Facebook": "META",
+    "Nvidia": "NVDA", "Netflix": "NFLX", "PepsiCo": "PEP", "Pepsi": "PEP",
+    "Coca-Cola": "KO", "Coke": "KO", "Johnson & Johnson": "JNJ", "J&J": "JNJ",
+    "JPMorgan": "JPM", "JP Morgan": "JPM", "Goldman Sachs": "GS", "Goldman": "GS",
+    "Walmart": "WMT", "Disney": "DIS", "Walt Disney": "DIS",
+    "Nike": "NKE", "Starbucks": "SBUX", "McDonald's": "MCD", "McDonalds": "MCD",
+    "Visa": "V", "Mastercard": "MA", "PayPal": "PYPL",
+    "Bank of America": "BAC", "Wells Fargo": "WFC", "Citigroup": "C", "Citi": "C",
+    "ExxonMobil": "XOM", "Exxon": "XOM", "Chevron": "CVX",
+    "Procter & Gamble": "PG", "P&G": "PG", "Unilever": "UL",
+    "Intel": "INTC", "AMD": "AMD", "Qualcomm": "QCOM", "Broadcom": "AVGO",
+    "Salesforce": "CRM", "Oracle": "ORCL", "SAP": "SAP", "IBM": "IBM",
+    "Boeing": "BA", "Caterpillar": "CAT", "3M": "MMM",
+    "Pfizer": "PFE", "Moderna": "MRNA", "AbbVie": "ABBV", "Merck": "MRK",
+    "UnitedHealth": "UNH", "CVS": "CVS", "Costco": "COST", "Target": "TGT",
+    "Home Depot": "HD", "Lowe's": "LOW", "Lowes": "LOW",
+    "Uber": "UBER", "Lyft": "LYFT", "Airbnb": "ABNB", "Booking": "BKNG",
+    "Spotify": "SPOT", "Snap": "SNAP", "Twitter": "X", "X": "X",
+    "Adobe": "ADBE", "Shopify": "SHOP", "Zoom": "ZM", "Slack": "CRM",
+    "Goldman": "GS", "Morgan Stanley": "MS", "BlackRock": "BLK",
+    "AT&T": "T", "Verizon": "VZ", "Comcast": "CMCSA",
+    "Berkshire": "BRK-B", "Berkshire Hathaway": "BRK-B",
+    "TSMC": "TSM", "Samsung": "SSNLF", "Sony": "SONY",
+    "Kellogg": "K", "General Mills": "GIS", "Kraft Heinz": "KHC",
+    "Colgate": "CL", "Kimberly-Clark": "KMB",
+    "FedEx": "FDX", "UPS": "UPS", "DHL": "DHL",
+}
+
+@st.cache_data(ttl=300)
+def search_ticker(query):
+    """Search Yahoo Finance for company name → return list of (name, ticker) matches."""
+    query = query.strip()
+    if not query or len(query) < 2:
+        return []
+    try:
+        results = yf.Search(query, max_results=6)
+        quotes  = results.quotes if hasattr(results, "quotes") else []
+        out = []
+        for q in quotes:
+            sym  = q.get("symbol", "")
+            name = q.get("longname") or q.get("shortname") or sym
+            qtype = q.get("quoteType", "")
+            if sym and qtype in ("EQUITY", "ETF"):
+                out.append((name, sym))
+        return out
+    except:
+        return []
 
 # ─────────────────────────────────────────────────────────────────
 # DATA FETCHER
@@ -156,14 +210,58 @@ def fetch_company_data(ticker_sym):
 
 with st.sidebar:
     st.markdown("## 🔍 Company Search")
-    ticker_input = st.text_input(
-        "Enter Ticker Symbol",
-        value="PEP",
-        placeholder="e.g. AAPL, MSFT, TSLA, GOOGL"
-    ).upper().strip()
+    st.caption("Type a company name or ticker symbol")
 
-    run_btn = st.button("▶  Run DCF Model", use_container_width=True)
-    st.caption("Data auto-fetched from Yahoo Finance")
+    search_query = st.text_input(
+        "Search Company",
+        value="",
+        placeholder="e.g. Apple, Tesla, PepsiCo, MSFT..."
+    ).strip()
+
+    # ── Smart lookup ──────────────────────────────────────────────
+    resolved_ticker = None
+
+    if search_query:
+        # 1. Check local dictionary first (instant, no API call)
+        for name, sym in COMPANY_LOOKUP.items():
+            if search_query.lower() in name.lower():
+                resolved_ticker = sym
+                break
+
+        # 2. If looks like a ticker (short, uppercase-able) → use directly
+        if not resolved_ticker and len(search_query) <= 5 and search_query.replace("-","").isalpha():
+            resolved_ticker = search_query.upper()
+
+        # 3. Live search via yfinance
+        if not resolved_ticker:
+            with st.spinner("Searching..."):
+                results = search_ticker(search_query)
+            if results:
+                options = [f"{name}  ({sym})" for name, sym in results]
+                chosen  = st.selectbox("Select company", options, label_visibility="collapsed")
+                resolved_ticker = chosen.split("(")[-1].rstrip(")")
+            else:
+                st.warning("No results found. Try a different name or ticker.")
+
+        if resolved_ticker:
+            st.success(f"✅ Selected: **{resolved_ticker}**")
+
+    # Popular quick-pick buttons
+    st.markdown("**⚡ Quick Pick**")
+    popular = [("🍎 Apple","AAPL"),("🪟 Microsoft","MSFT"),("🔍 Google","GOOGL"),
+               ("🛒 Amazon","AMZN"),("🚗 Tesla","TSLA"),("🟢 Nvidia","NVDA"),
+               ("👟 Nike","NKE"),("🥤 PepsiCo","PEP"),("💳 Visa","V"),("📱 Meta","META")]
+    cols = st.columns(2)
+    for i, (label, sym) in enumerate(popular):
+        with cols[i % 2]:
+            if st.button(label, key=f"quick_{sym}", use_container_width=True):
+                resolved_ticker = sym
+                st.session_state.ticker = sym
+
+    final_ticker = resolved_ticker or st.session_state.get("ticker", "PEP")
+
+    run_btn = st.button("▶  Run DCF Model", use_container_width=True, type="primary")
+    st.caption("Data auto-fetched live from Yahoo Finance")
     st.divider()
 
     st.markdown("**📈 Revenue Growth (Override)**")
@@ -198,8 +296,8 @@ with st.sidebar:
 if "ticker" not in st.session_state:
     st.session_state.ticker = "PEP"
 
-if run_btn and ticker_input:
-    st.session_state.ticker = ticker_input
+if run_btn and final_ticker:
+    st.session_state.ticker = final_ticker.upper().strip()
 
 ticker_sym = st.session_state.ticker
 
@@ -598,103 +696,3 @@ with tab4:
 # ──────────────────────────────────────────────────────────────────
 with tab5:
     st.markdown('<div class="section-title">Download Excel Report</div>', unsafe_allow_html=True)
-
-    def build_excel():
-        wb  = Workbook()
-        ws  = wb.active
-        ws.title = "DCF Summary"
-        ws.sheet_view.showGridLines = False
-
-        NF = PatternFill("solid", fgColor="1B3A6B")
-        LB = PatternFill("solid", fgColor="D6E4FF")
-        GF = PatternFill("solid", fgColor="D5F0E3")
-
-        def h(r, c, v, bg=NF, fg="FFFFFF", merge=None):
-            cell = ws.cell(r, c, v)
-            cell.fill = bg; cell.font = Font(color=fg, bold=True, name="Calibri", size=10)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            if merge: ws.merge_cells(start_row=r, start_column=c, end_row=r, end_column=merge)
-
-        def v(r, c, val, fmt="#,##0", bold=False, bg=None):
-            cell = ws.cell(r, c, val)
-            cell.number_format = fmt; cell.font = Font(bold=bold, name="Calibri")
-            cell.alignment = Alignment(horizontal="right", vertical="center")
-            if bg: cell.fill = bg
-
-        ws.column_dimensions["A"].width = 2
-        ws.column_dimensions["B"].width = 42
-        for col in ["C","D","E","F","G"]: ws.column_dimensions[col].width = 14
-
-        h(1, 2, f"{d['name']} ({d['ticker']}) — DCF Valuation 2026–2030", merge=7)
-        h(2, 2, f"Built by Poonam Dhanuka | DePaul MS Finance 2027 | {datetime.today().strftime('%B %d, %Y')}",
-          bg=LB, fg="1B3A6B", merge=7)
-        h(3, 2, f"Current Price: ${d['price']:.2f} | WACC: {m['wacc']*100:.2f}% | Blended Fair Value: ${avg_pps:.2f}",
-          bg=LB, fg="1B3A6B", merge=7)
-
-        h(5, 2, "Particulars")
-        for i, y in enumerate(YEARS): h(5, 3+i, str(y))
-
-        data_rows = [
-            ("Revenue ($mn)",  m['revenues'], "#,##0", False),
-            ("EBIT ($mn)",     m['ebits'],    "#,##0", False),
-            ("(-) Tax",        m['taxes'],    "#,##0", False),
-            ("NOPAT",          m['nopats'],   "#,##0", True),
-            ("D&A",            m['das'],      "#,##0", False),
-            ("(-) CapEx",      m['capexs'],   "#,##0", False),
-            ("FCFF",           m['fcffs'],    "#,##0", True),
-            ("PV Factor",      m['pv_f'],     "0.0000",False),
-            ("PV of FCFF",     m['pv_fcff'],  "#,##0", True),
-        ]
-        for ri, (label, values, fmt, bold) in enumerate(data_rows):
-            r2 = 6 + ri
-            bg  = GF if bold else None
-            ws.cell(r2, 2, label).font = Font(bold=bold, name="Calibri")
-            for ci, val2 in enumerate(values): v(r2, 3+ci, val2, fmt, bold, bg)
-
-        r2 = 17
-        h(r2, 2, "VALUATION SUMMARY", merge=5)
-        for i, (lbl, val2) in enumerate([
-            ("Current Market Price ($)",      d['price']),
-            ("WACC",                          f"{m['wacc']*100:.2f}%"),
-            ("PV Explicit Period ($mn)",       m['pv_exp']),
-            ("EV — Gordon Growth ($mn)",       m['ev_gg']),
-            ("Fair Value/Share — GG ($)",      m['pps_gg']),
-            ("EV — Exit Multiple ($mn)",       m['ev_exit']),
-            ("Fair Value/Share — Exit ($)",    m['pps_exit']),
-            ("Blended Fair Value/Share ($)",   round(avg_pps,2)),
-        ]):
-            rr = 18+i
-            ws.cell(rr,2,lbl).font = Font(name="Calibri", bold="Fair Value" in lbl or "Blended" in lbl)
-            cell = ws.cell(rr, 3, val2)
-            cell.font      = Font(name="Calibri", bold="Fair Value" in lbl or "Blended" in lbl)
-            cell.alignment = Alignment(horizontal="right")
-            if "Fair Value" in lbl or "Blended" in lbl: cell.fill = GF
-
-        buf = io.BytesIO()
-        wb.save(buf); buf.seek(0)
-        return buf
-
-    st.download_button(
-        label=f"📥 Download {d['ticker']} DCF Report (.xlsx)",
-        data=build_excel(),
-        file_name=f"{d['ticker']}_DCF_{datetime.today().strftime('%Y%m%d')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
-
-    st.markdown(f"""
-    <div class="info-box">
-        <b>How this works:</b> Type any stock ticker in the sidebar → click <b>Run DCF Model</b>
-        → real financials (revenue, EBIT, D&A, CapEx, debt, cash) are fetched live from Yahoo Finance
-        → projections are auto-calculated → adjust any assumption → download the Excel report.
-    </div>
-    """, unsafe_allow_html=True)
-
-# ── Footer ───────────────────────────────────────────────────────
-st.markdown('<hr>', unsafe_allow_html=True)
-st.markdown(f"""
-<div style="text-align:center;color:#444;font-size:11px;padding:8px">
-    Built by <b style="color:#1B3A6B">Poonam Dhanuka</b> · DePaul MS Finance 2027 ·
-    DCF Valuation Model · Data: Yahoo Finance · For educational purposes only · Not investment advice
-</div>
-""", unsafe_allow_html=True)
