@@ -813,25 +813,33 @@ with tab5:
         hdr(ws3, 1, 1, "DCF Bridge ($mn)", fill=hdr_fill, font=Font(bold=True,color="FFFFFF",size=13), align=Alignment(horizontal="left"))
         ws3.merge_cells("A1:B1")
 
+        def fmt_val(v):
+            """Format number: negatives as $(x), positives as $x, floats as $x.xx"""
+            if isinstance(v, float):
+                return f"$({abs(v):,.2f})" if v < 0 else f"${v:,.2f}"
+            if isinstance(v, int):
+                return f"$({abs(v):,})" if v < 0 else f"${v:,}"
+            return str(v)
+
         bridge_rows_gg = [
-            ("PV of Explicit FCFs",         m['pv_exp']),
-            ("PV of Terminal Value (GG)",    m['pv_tv_gg']),
-            ("Enterprise Value",             m['ev_gg']),
-            ("+ Cash",                       cash_val),
-            ("+ Non-Operating Assets",       non_op),
-            ("− Gross Debt",                 -gross_debt),
-            ("− NCI",                        -nci),
-            ("= Equity Value",               m['eq_gg']),
-            ("÷ Diluted Shares (mn)",        shares_out),
-            ("★ Price Per Share (GG)",       m['pps_gg']),
+            ("PV of Explicit FCFs",      m['pv_exp']),
+            ("PV of Terminal Value (GG)",m['pv_tv_gg']),
+            ("Enterprise Value",         m['ev_gg']),
+            ("Add: Cash",                cash_val),
+            ("Add: Non-Operating Assets",non_op),
+            ("Less: Gross Debt",         -gross_debt),
+            ("Less: NCI",                -nci),
+            ("Equity Value",             m['eq_gg']),
+            ("Diluted Shares (mn)",      shares_out),
+            ("Price Per Share (GG)",     m['pps_gg']),
         ]
         hdr(ws3, 2, 1, "Gordon Growth Method", fill=sub_fill, font=sub_font, align=Alignment(horizontal="left"))
         hdr(ws3, 2, 2, "Value ($mn)", fill=sub_fill, font=sub_font)
         for i, (lbl, v) in enumerate(bridge_rows_gg):
             f = alt_fill if i % 2 == 0 else None
-            bold_row = "★" in lbl or "Enterprise" in lbl or "Equity" in lbl
+            bold_row = lbl in ("Equity Value", "Enterprise Value", "Price Per Share (GG)")
             val(ws3, 3+i, 1, lbl, fill=f, font=Font(bold=bold_row, size=10), align=Alignment(horizontal="left"))
-            val(ws3, 3+i, 2, f"${v:,}" if isinstance(v,int) else f"${v:.2f}", fill=f, font=Font(bold=bold_row, color="1B3A6B", size=10))
+            val(ws3, 3+i, 2, fmt_val(v), fill=f, font=Font(bold=bold_row, color="1B3A6B", size=10))
 
         # ── Sheet 4: WACC ─────────────────────────────────────────
         ws4 = wb.create_sheet("WACC")
