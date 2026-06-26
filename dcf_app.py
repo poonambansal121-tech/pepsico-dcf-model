@@ -451,7 +451,7 @@ with tab4:
     base_wacc_label = f"{m['wacc']*100:.1f}%"
     base_ltgr_label = f"{ltgr*100:.1f}%"
 
-    styled = df_sens.style.applymap(color_cell).format(
+    styled = df_sens.style.map(color_cell).format(
         lambda x: f"${x:.2f}" if x is not None else "N/A"
     )
     st.dataframe(styled, use_container_width=True, height=320)
