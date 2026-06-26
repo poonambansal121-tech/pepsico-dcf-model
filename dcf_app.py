@@ -668,16 +668,16 @@ with tab4:
     df_sens.index.name = "WACC \\ LTGR"
 
     def color_cell(val):
-        if val is None: return 'background-color:#e2e8f0; color:#94a3b8; font-style:italic'
+        if val is None: return 'background-color:#0f1c30; color:#3a5a80; font-style:italic'
         if val > base_pps*1.15: return 'background-color:#1B3A6B; color:#ffffff; font-weight:bold'
-        if val < base_pps*0.85: return 'background-color:#bfdbfe; color:#1e3a5f; font-weight:bold'
-        return 'background-color:#dbeafe; color:#1e3a5f'
+        if val < base_pps*0.85: return 'background-color:#4a7ab5; color:#ffffff; font-weight:bold'
+        return 'background-color:#2d5aa0; color:#ffffff'
 
     styled = df_sens.style.map(color_cell).format(
         lambda x: f"${x:.2f}" if x is not None else "N/A"
     )
     st.dataframe(styled, use_container_width=True, height=300)
-    st.caption("🔵 Dark Blue = >15% above base case · 🩵 Light Blue = >15% below base case")
+    st.caption("🔵 Dark Navy (#1B3A6B) = >15% above base  ·  🔷 Mid Blue (#2d5aa0) = base range  ·  🩵 Light Blue = >15% below base")
 
     # Tornado
     st.markdown('<div class="section-title">Key Driver Impact on Share Price</div>', unsafe_allow_html=True)
@@ -708,13 +708,14 @@ with tab4:
     }
     fig_t = go.Figure(go.Bar(
         x=list(impacts.values()), y=list(impacts.keys()), orientation='h',
-        marker_color=['#1B3A6B' if v>=0 else '#93c5fd' for v in impacts.values()],
-        opacity=0.9,
+        marker_color=['#1B3A6B' if v>=0 else '#2d5aa0' for v in impacts.values()],
+        marker_line=dict(color='#aac', width=0.5),
+        opacity=0.95,
         text=[f"+${v:.2f}" if v>=0 else f"-${abs(v):.2f}" for v in impacts.values()],
         textposition='outside',
-        textfont=dict(color='#ffffff', size=11),
+        textfont=dict(color='#aac', size=11),
     ))
-    fig_t.add_vline(x=0, line_dash="dash", line_color="#4a90d9", line_width=1.5)
+    fig_t.add_vline(x=0, line_dash="dash", line_color="#aac", line_width=1.5)
     fig_t.update_layout(height=280, **DARK, title=f"Key Driver Impact on Share Price ($) — Base: ${base_pps:.2f}")
     st.plotly_chart(fig_t, use_container_width=True)
 
